@@ -51,10 +51,12 @@ python ChatBridge_APIHijackForwarder.py
    Configure and connect to WebSocket in SillyTavern extension settings:
 - 设置服务器地址(默认localhost)
 - 设置端口(默认8001)
+- 设置Token（可选，留空禁用）
 - 点击"连接"按钮
 
 - Set the server address (default: localhost)
 - Set the port (default: 8001)
+- Set Token (optional, leave empty to disable)
 - Click the "Connect" button
 
 ### 3. 外部应用调用 / External Application Calls

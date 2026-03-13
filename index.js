@@ -5,7 +5,8 @@ import { chat } from "../../../../script.js";
 const extensionName = "SillyTavern-Extension-ChatBridge";
 const defaultSettings = {
     wsPort: 8001,
-    autoConnect: false
+    autoConnect: false,
+    token: ""
 };
 
 if (!extension_settings[extensionName]) {
@@ -61,9 +62,14 @@ function convertOpenAIToSTMessage(msg) {
 function setupWebSocket() {
     const wsUrl = $('#ws_url').val();
     const wsPort = $('#ws_port').val();
-    updateDebugLog(`尝试连接WebSocket服务器: ws://${wsUrl}:${wsPort}`);
+    const token = $('#ws_token').val();
+    let wsUrlFull = `ws://${wsUrl}:${wsPort}`;
+    if (token) {
+        wsUrlFull += `?token=${encodeURIComponent(token)}`;
+    }
+    updateDebugLog(`尝试连接WebSocket服务器: ${wsUrlFull}`);
 
-    ws = new WebSocket(`ws://${wsUrl}:${wsPort}`);
+    ws = new WebSocket(wsUrlFull);
 
     ws.onopen = () => {
         updateWSStatus(true);
@@ -116,6 +122,7 @@ function updateConnectionButtons(connected) {
     $('#ws_disconnect').prop('disabled', !connected);
     $('#ws_url').prop('disabled', connected);
     $('#ws_port').prop('disabled', connected);
+    $('#ws_token').prop('disabled', connected);
 }
 
 function disconnectWebSocket() {
@@ -171,9 +178,14 @@ jQuery(async () => {
     $('#ws_connect').on('click', setupWebSocket);
     $('#ws_disconnect').on('click', disconnectWebSocket);
     $('#ws_port').val(extension_settings[extensionName].wsPort);
+    $('#ws_token').val(extension_settings[extensionName].token);
 
     $('#ws_port').on('change', function () {
         extension_settings[extensionName].wsPort = $(this).val();
+        saveSettingsDebounced();
+    });
+    $('#ws_token').on('change', function () {
+        extension_settings[extensionName].token = $(this).val();
         saveSettingsDebounced();
     });
     setupWebSocket();
