@@ -4,9 +4,7 @@ import { chat } from "../../../../script.js";
 
 const extensionName = "SillyTavern-Extension-ChatBridge";
 const defaultSettings = {
-    host: "localhost",
-    port: 8003,
-    https: false,
+    url: "http://localhost:8003",
     autoConnect: false,
     token: ""
 };
@@ -32,9 +30,8 @@ let pollAbortController = null;
 // ─── 工具函数 ────────────────────────────────────────────────────────────────
 
 function getBaseUrl() {
-    const s = extension_settings[extensionName];
-    const scheme = s.https ? "https" : "http";
-    return `${scheme}://${s.host}:${s.port}`;
+    // 去掉末尾斜杠
+    return (extension_settings[extensionName].url || 'http://localhost:8003').replace(/\/$/, '');
 }
 
 function getHeaders() {
@@ -72,10 +69,8 @@ function updateStatus(connected) {
 function updateControlButtons(running) {
     $('#cb_connect').prop('disabled', running);
     $('#cb_disconnect').prop('disabled', !running);
-    $('#cb_host').prop('disabled', running);
-    $('#cb_port').prop('disabled', running);
+    $('#cb_url').prop('disabled', running);
     $('#cb_token').prop('disabled', running);
-    $('#cb_https').prop('disabled', running);
 }
 
 // ─── 消息格式转换 ─────────────────────────────────────────────────────────────
@@ -283,27 +278,17 @@ jQuery(async () => {
     const s = extension_settings[extensionName];
 
     // 填充 UI 初始值
-    $('#cb_host').val(s.host || 'localhost');
-    $('#cb_port').val(s.port || 8003);
+    $('#cb_url').val(s.url || 'http://localhost:8003');
     $('#cb_token').val(s.token || '');
-    $('#cb_https').prop('checked', s.https || false);
     $('#cb_auto_connect').prop('checked', s.autoConnect || false);
 
     // 保存设置
-    $('#cb_host').on('change', function () {
-        extension_settings[extensionName].host = $(this).val();
-        saveSettingsDebounced();
-    });
-    $('#cb_port').on('change', function () {
-        extension_settings[extensionName].port = parseInt($(this).val());
+    $('#cb_url').on('change', function () {
+        extension_settings[extensionName].url = $(this).val().trim();
         saveSettingsDebounced();
     });
     $('#cb_token').on('change', function () {
         extension_settings[extensionName].token = $(this).val();
-        saveSettingsDebounced();
-    });
-    $('#cb_https').on('change', function () {
-        extension_settings[extensionName].https = $(this).prop('checked');
         saveSettingsDebounced();
     });
 
