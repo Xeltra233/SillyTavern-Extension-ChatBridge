@@ -5,6 +5,8 @@
             <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
         </div>
         <div class="inline-drawer-content">
+
+            <!-- WebSocket 连接 -->
             <div class="ChatBridgeExtension_connection">
                 <div class="ChatBridgeExtension_server_settings">
                     <div class="ChatBridgeExtension_url_input">
@@ -29,28 +31,48 @@
                     </label>
                 </div>
             </div>
+
+            <!-- 连接状态 -->
             <div class="ChatBridgeExtension_status">
                 <label>服务器状态:</label>
                 <div id="ws_status" style="color: red;">未连接</div>
             </div>
-            <div class="ChatBridgeExtension_debug">
-                <label>调试信息:</label>
-                <!-- 添加 debug_log 文本区域 -->
-                <textarea id="debug_log" rows="40" style="width: 100%; background-color: var(--background-color); color: var(--text-color); border: 1px solid var(--accent-color);" readonly></textarea>
-            </div>
-            <!-- 测试用区域
-            <div class="flex-container flexnowrap">
-                <hr>
-                <h3>测试区域</h3>
-                <div class="flex-container flexnowrap">
-                    <div style="margin: 10px 0; width: 100%;">
-                        <input type="text" id="test_message" placeholder="输入测试消息" style="width: 70%;">
-                        <input type="button" id="show_chat" value="显示当前聊天" class="menu_button">
-                        <input type="button" id="replace_chat" value="替换聊天" class="menu_button">
+
+            <!-- 后端配置（通过 ST Server Plugin 读写 settings.json） -->
+            <div class="inline-drawer" style="margin-top: 10px;">
+                <div class="inline-drawer-toggle inline-drawer-header">
+                    <b>后端配置</b>
+                    <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+                </div>
+                <div class="inline-drawer-content">
+                    <div style="margin: 6px 0;">
+                        <label>User API Key（QQ机器人鉴权，留空不鉴权）:</label>
+                        <input type="password" id="cb_user_api_key" style="width:100%;" />
+                    </div>
+                    <div style="margin: 6px 0;">
+                        <label>User API 端口:</label>
+                        <input type="number" id="cb_user_api_port" value="8003" style="width:100%;" />
+                    </div>
+                    <div style="margin: 6px 0;">
+                        <label>WebSocket 端口:</label>
+                        <input type="number" id="cb_ws_port" value="8001" style="width:100%;" />
+                    </div>
+                    <div style="margin: 6px 0; display: flex; gap: 8px; align-items: center;">
+                        <input type="button" id="cb_save_settings" value="保存并重启后端" />
+                        <span id="cb_save_status" style="font-size: 0.85em; color: gray;"></span>
+                    </div>
+                    <div style="margin: 6px 0;">
+                        <label>后端进程: <span id="cb_py_status" style="color: gray;">检测中...</span></label>
                     </div>
                 </div>
-            </div> 
-            -->
+            </div>
+
+            <!-- 调试日志 -->
+            <div class="ChatBridgeExtension_debug">
+                <label>调试信息:</label>
+                <textarea id="debug_log" rows="40" style="width: 100%; background-color: var(--background-color); color: var(--text-color); border: 1px solid var(--accent-color);" readonly></textarea>
+            </div>
+
         </div>
     </div>
 </div>

@@ -13,22 +13,22 @@ if (!extension_settings[extensionName]) {
     extension_settings[extensionName] = {};
 }
 
-Object.assign(extension_settings[extensionName], defaultSettings);
+Object.keys(defaultSettings).forEach(key => {
+    if (extension_settings[extensionName][key] === undefined) {
+        extension_settings[extensionName][key] = defaultSettings[key];
+    }
+});
 
 let ws;
 
+// ─── 调试日志 ─────────────────────────────────────────────────────────────────
+
 function updateDebugLog(message) {
     const debugLog = $('#debug_log');
-    if (debugLog.length === 0) {
-        console.warn('找不到调试日志元素');
-        return;
-    }
+    if (debugLog.length === 0) return;
     const timestamp = new Date().toLocaleTimeString();
-    const currentContent = debugLog.val();
-    const newLine = `[${timestamp}] ${message}\n`;
-    debugLog.val(currentContent + newLine);
+    debugLog.val(debugLog.val() + `[${timestamp}] ${message}\n`);
     debugLog.scrollTop(debugLog[0].scrollHeight);
-    // 同时在控制台输出，方便调试
     console.log(`[${extensionName}] ${message}`);
 }
 
@@ -40,24 +40,23 @@ function updateWSStatus(connected) {
         status.text('未连接').css('color', 'red');
     }
 }
+
+// ─── 消息格式转换 ─────────────────────────────────────────────────────────────
+
 function convertOpenAIToSTMessage(msg) {
     const isUser = msg.role === 'user';
-    const currentTime = new Date().toLocaleString();
-
     return {
-        name: isUser ? 'user' : 'Assistant', // 注意：用户名要小写
+        name: isUser ? 'user' : 'Assistant',
         is_user: isUser,
         is_system: false,
-        send_date: currentTime,
+        send_date: new Date().toLocaleString(),
         mes: msg.content,
-        extra: {
-            isSmallSys: false,
-            token_count: 0,
-            reasoning: ''
-        },
+        extra: { isSmallSys: false, token_count: 0, reasoning: '' },
         force_avatar: null
     };
 }
+
+// ─── WebSocket ────────────────────────────────────────────────────────────────
 
 function setupWebSocket() {
     const wsUrl = $('#ws_url').val();
@@ -75,8 +74,8 @@ function setupWebSocket() {
         updateWSStatus(true);
         updateConnectionButtons(true);
         updateDebugLog('WebSocket连接已建立');
-        //sendChatHistory();
     };
+
     ws.onmessage = async (event) => {
         try {
             const data = JSON.parse(event.data);
@@ -102,9 +101,10 @@ function setupWebSocket() {
             }
         } catch (error) {
             updateDebugLog(`处理消息时出错: ${error.message}`);
-            console.error(error); // 输出完整错误信息
+            console.error(error);
         }
     };
+
     ws.onclose = () => {
         updateWSStatus(false);
         updateConnectionButtons(false);
@@ -126,26 +126,19 @@ function updateConnectionButtons(connected) {
 }
 
 function disconnectWebSocket() {
-    if (ws) {
-        ws.close();
-    }
+    if (ws) ws.close();
     updateWSStatus(false);
     updateConnectionButtons(false);
     updateDebugLog('已断开WebSocket连接');
-    // 如果启用了自动尝试连接，立即开始计时
     if (extension_settings[extensionName].autoConnect) {
         startAutoConnect();
     }
 }
 
-//自动尝试连接
 let autoConnectTimer = null;
-//自动尝试连接功能
+
 function startAutoConnect() {
-    if (autoConnectTimer) {
-        clearInterval(autoConnectTimer);
-    }
-    
+    if (autoConnectTimer) clearInterval(autoConnectTimer);
     autoConnectTimer = setInterval(() => {
         if (!ws || ws.readyState === WebSocket.CLOSED) {
             updateDebugLog('自动尝试连接尝试中...');
@@ -161,24 +154,121 @@ function stopAutoConnect() {
     }
 }
 
+// ─── Plugin API：后端配置 ─────────────────────────────────────────────────────
 
+const PLUGIN_API = '/api/plugins/chatbridge';
+let pluginAvailable = false;
+
+async function checkPlugin() {
+    try {
+        const resp = await fetch(`${PLUGIN_API}/probe`, { method: 'POST' });
+        pluginAvailable = resp.ok;
+    } catch {
+        pluginAvailable = false;
+    }
+    if (!pluginAvailable) {
+        $('#cb_py_status').text('插件未加载（需要 enableServerPlugins: true）').css('color', 'orange');
+        updateDebugLog('ChatBridge Server Plugin 未加载，后端配置功能不可用');
+    }
+    return pluginAvailable;
+}
+
+async function loadBackendSettings() {
+    if (!pluginAvailable) return;
+    try {
+        const resp = await fetch(`${PLUGIN_API}/settings`);
+        if (!resp.ok) return;
+        const s = await resp.json();
+        $('#cb_user_api_key').val(s?.user_api?.api_key || '');
+        $('#cb_user_api_port').val(s?.user_api?.port || 8003);
+        $('#cb_ws_port').val(s?.websocket?.port || 8001);
+    } catch (e) {
+        updateDebugLog(`读取后端配置失败: ${e.message}`);
+    }
+}
+
+async function saveBackendSettings() {
+    if (!pluginAvailable) {
+        $('#cb_save_status').text('插件未加载').css('color', 'red');
+        return;
+    }
+
+    // 先读取当前完整配置，再只覆盖用户修改的字段
+    let current = {};
+    try {
+        const resp = await fetch(`${PLUGIN_API}/settings`);
+        if (resp.ok) current = await resp.json();
+    } catch { /* 读取失败就用空对象 */ }
+
+    const newSettings = {
+        ...current,
+        websocket: {
+            ...(current.websocket || {}),
+            host: '0.0.0.0',
+            port: parseInt($('#cb_ws_port').val()) || 8001,
+            token: '',
+        },
+        st_api: {
+            ...(current.st_api || {}),
+            host: '0.0.0.0',
+            port: 8002,
+            api_key: 'st-internal-key',
+        },
+        user_api: {
+            ...(current.user_api || {}),
+            host: '0.0.0.0',
+            port: parseInt($('#cb_user_api_port').val()) || 8003,
+            api_key: $('#cb_user_api_key').val().trim(),
+        },
+        llm_api: current.llm_api || { base_url: 'http://localhost', api_keys: ['placeholder'] },
+    };
+
+    try {
+        $('#cb_save_status').text('保存中...').css('color', 'gray');
+        const resp = await fetch(`${PLUGIN_API}/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newSettings),
+        });
+        if (resp.ok) {
+            $('#cb_save_status').text('已保存，后端重启中...').css('color', 'green');
+            updateDebugLog('后端配置已保存，py 进程正在重启');
+            setTimeout(pollPyStatus, 2000);
+        } else {
+            $('#cb_save_status').text(`保存失败 HTTP ${resp.status}`).css('color', 'red');
+        }
+    } catch (e) {
+        $('#cb_save_status').text(`保存失败: ${e.message}`).css('color', 'red');
+    }
+}
+
+async function pollPyStatus() {
+    if (!pluginAvailable) return;
+    try {
+        const resp = await fetch(`${PLUGIN_API}/status`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const statusEl = $('#cb_py_status');
+        if (data.running) {
+            statusEl.text(`运行中 (PID: ${data.pid})`).css('color', 'green');
+        } else {
+            statusEl.text('已停止').css('color', 'red');
+        }
+    } catch { /* 忽略 */ }
+}
+
+// ─── 初始化 ───────────────────────────────────────────────────────────────────
 
 jQuery(async () => {
-
-    // // 事件系统测试代码
-    // const context = getContext();
-    // updateDebugLog('=== 可用事件类型 ===');
-    // for (const eventType in context.eventTypes) {
-    //     updateDebugLog(`${eventType}: ${context.eventTypes[eventType]}`);
-    // }
-
     const template = await $.get(`/scripts/extensions/third-party/${extensionName}/index.html`);
     $('#extensions_settings').append(template);
 
-    $('#ws_connect').on('click', setupWebSocket);
-    $('#ws_disconnect').on('click', disconnectWebSocket);
+    // WebSocket 设置
     $('#ws_port').val(extension_settings[extensionName].wsPort);
     $('#ws_token').val(extension_settings[extensionName].token);
+
+    $('#ws_connect').on('click', setupWebSocket);
+    $('#ws_disconnect').on('click', disconnectWebSocket);
 
     $('#ws_port').on('change', function () {
         extension_settings[extensionName].wsPort = $(this).val();
@@ -188,16 +278,12 @@ jQuery(async () => {
         extension_settings[extensionName].token = $(this).val();
         saveSettingsDebounced();
     });
-    setupWebSocket();
 
-    //自动尝试连接
     $('#ws_auto_connect').prop('checked', extension_settings[extensionName].autoConnect);
-    // 添加自动尝试连接复选框的事件处理
-    $('#ws_auto_connect').on('change', function() {
+    $('#ws_auto_connect').on('change', function () {
         const isChecked = $(this).prop('checked');
         extension_settings[extensionName].autoConnect = isChecked;
         saveSettingsDebounced();
-        
         if (isChecked) {
             updateDebugLog('已启用自动尝试连接');
             startAutoConnect();
@@ -206,142 +292,24 @@ jQuery(async () => {
             stopAutoConnect();
         }
     });
-    
-    // 如果启用了自动尝试连接，则启动定时器
+
+    // 后端配置
+    $('#cb_save_settings').on('click', saveBackendSettings);
+
+    // 检测 plugin 是否可用，可用则加载配置
+    const available = await checkPlugin();
+    if (available) {
+        await loadBackendSettings();
+        pollPyStatus();
+        // 每 10 秒刷新一次进程状态
+        setInterval(pollPyStatus, 10000);
+    }
+
+    // 自动连接 WebSocket
+    setupWebSocket();
     if (extension_settings[extensionName].autoConnect) {
         startAutoConnect();
     }
 
     updateDebugLog('扩展初始化完成');
-
-    // 以下为测试代码
-    // $('#show_chat').on('click', () => {
-    //     const context = getContext();
-
-    //     updateDebugLog('=== 当前聊天状态 ===');
-    //     updateDebugLog('name1: ' + context.name1);
-    //     updateDebugLog('name2: ' + context.name2);
-    //     updateDebugLog('characterId: ' + context.characterId);
-    //     updateDebugLog('当前聊天内容:');
-    //     updateDebugLog(JSON.stringify(context.chat, null, 2));
-    //     updateDebugLog('当前聊天元数据:');
-    //     updateDebugLog(JSON.stringify(context.chatMetadata, null, 2));
-    // });
-
-    // $('#replace_chat').on('click', () => {
-    //     const context = getContext();
-
-    //     const nativeChat = [
-    //         {
-    //             "name": "user",
-    //             "is_user": true,
-    //             "is_system": false,
-    //             "send_date": "February 26, 2025 2:09pm",
-    //             "mes": "？",
-    //             "extra": {
-    //                 "isSmallSys": false,
-    //                 "token_count": 2,
-    //                 "reasoning": ""
-    //             },
-    //             "force_avatar": "User Avatars/1739777502672-user.png"
-    //         },
-    //         {
-    //             "extra": {
-    //                 "api": "custom",
-    //                 "model": "gemini-2.0-flash-exp",
-    //                 "reasoning": "",
-    //                 "reasoning_duration": null,
-    //                 "token_count": 64
-    //             },
-    //             "name": "测试",
-    //             "is_user": false,
-    //             "send_date": "February 26, 2025 2:09pm",
-    //             "mes": "我不太确定你在问什么。你可以更详细地说明你的问题吗？",
-    //             "title": "",
-    //             "gen_started": "2025-02-26T06:09:43.173Z",
-    //             "gen_finished": "2025-02-26T06:09:45.338Z",
-    //             "swipe_id": 0,
-    //             "swipes": ["我不太确定你在问什么。你可以更详细地说明你的问题吗？"],
-    //             "swipe_info": [{
-    //                 "send_date": "February 26, 2025 2:09pm",
-    //                 "gen_started": "2025-02-26T06:09:43.173Z",
-    //                 "gen_finished": "2025-02-26T06:09:45.338Z",
-    //                 "extra": {
-    //                     "api": "custom",
-    //                     "model": "gemini-2.0-flash-exp",
-    //                     "reasoning": "",
-    //                     "reasoning_duration": null,
-    //                     "token_count": 64
-    //                 }
-    //             }]
-    //         }
-    //     ];
-
-    //     const nativeChat2 = [
-    //         {
-    //             "name": "user",
-    //             "is_user": true,
-    //             "is_system": false,
-    //             "send_date": "February 28, 2025 12:43am",
-    //             "mes": "?",
-    //             "extra": {
-    //                 "isSmallSys": false,
-    //                 "token_count": 2,
-    //                 "reasoning": ""
-    //             },
-    //             "force_avatar": "User Avatars/1739777502672-user.png"
-    //         },
-    //         {
-    //             "extra": {
-    //                 "api": "custom",
-    //                 "model": "gemini-2.0-flash-exp",
-    //                 "reasoning": "",
-    //                 "reasoning_duration": null,
-    //                 "token_count": 3
-    //             },
-    //             "name": "测试",
-    //             "is_user": false,
-    //             "send_date": "February 28, 2025 12:43am",
-    //             "mes": "Hello!?",
-    //             "title": "",
-    //             "gen_started": "2025-02-27T16:43:43.214Z",
-    //             "gen_finished": "2025-02-27T16:43:45.973Z",
-    //             "swipe_id": 0,
-    //             "swipes": [
-    //                 "Hello!?"
-    //             ],
-    //             "swipe_info": [
-    //                 {
-    //                     "send_date": "February 28, 2025 12:43am",
-    //                     "gen_started": "2025-02-27T16:43:43.214Z",
-    //                     "gen_finished": "2025-02-27T16:43:45.973Z",
-    //                     "extra": {
-    //                         "api": "custom",
-    //                         "model": "gemini-2.0-flash-exp",
-    //                         "reasoning": "",
-    //                         "reasoning_duration": null,
-    //                         "token_count": 3
-    //                     }
-    //                 }
-    //             ]
-    //         }
-    //     ];
-
-
-    //     try {
-    //         //必须先启用新对话
-    //         //先清空再添加
-    //         chat.splice(0, chat.length, ...nativeChat);
-    //         //chat.splice(0, chat.length, ...nativeChat2);
-    //         context.clearChat();
-    //         context.printMessages();
-    //         context.eventSource.emit(context.eventTypes.CHAT_CHANGED, context.getCurrentChatId());
-            
-    //     } catch (error) {
-    //         updateDebugLog(`替换聊天时出错: ${error.message}`);
-    //         console.error(error);
-    //     }
-    // });
-
-    // updateDebugLog('测试功能已初始化');
 });
