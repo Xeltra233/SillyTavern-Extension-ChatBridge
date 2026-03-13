@@ -55,7 +55,7 @@ function convertOpenAIToSTMessage(msg) {
             token_count: 0,
             reasoning: ''
         },
-        force_avatar: isUser ? "User Avatars/1739777502672-user.png" : null
+        force_avatar: null
     };
 }
 
