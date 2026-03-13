@@ -99,8 +99,32 @@
 }
 .ChatBridgeExtension_server_settings {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     align-items: center;
+}
+
+.ChatBridgeExtension_url_input,
+.ChatBridgeExtension_port_input,
+.ChatBridgeExtension_token_input {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ChatBridgeExtension_url_input {
+    flex: 2;
+    min-width: 200px;
+}
+
+.ChatBridgeExtension_port_input {
+    flex: 1;
+    min-width: 120px;
+}
+
+.ChatBridgeExtension_token_input {
+    flex: 2;
+    min-width: 200px;
 }
 
 .ChatBridgeExtension_controls {
@@ -118,6 +142,14 @@
 }
 
 .ChatBridgeExtension_url_input input {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    border: 1px solid var(--accent-color);
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+.ChatBridgeExtension_token_input input {
     background-color: var(--background-color);
     color: var(--text-color);
     border: 1px solid var(--accent-color);
